@@ -117,7 +117,9 @@ init_predictor()
   
     metaPredictorTableSize = 1 << lhistoryBits;
     localBranchHistTableSize = 1 << lhistoryBits; 
-    localPatternTableSize = 1 << lhistoryBits;
+    localPatternTableSize = 1 << lhistoryBits;    
+    globalHistoryBits = ghistoryBits;
+    globalPredictorTableSize = 1 << globalHistoryBits;
     globalBranchHistory = 0; 
     predictedResult = 0;
 
@@ -133,8 +135,6 @@ init_predictor()
     }
 
     // initialize global br predictor 
-    globalHistoryBits = ghistoryBits;
-    globalPredictorTableSize = 1 << globalHistoryBits;
     for(j = 0; j < globalPredictorTableSize; j++){
       globalPredictorTable[j] =  1;
     }
