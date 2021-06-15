@@ -64,6 +64,20 @@ uint32_t *localPatternTable; // a table of local patterns indexed elements in th
 uint32_t predictedResult; // holds the predictor's prediction 
 
 //------------------------------------//
+//           Helper Functions         //
+//------------------------------------//
+
+// helper function to get bit mask from bits a thru b 
+uint32_t create_bitMask(uint32_t a, uint32_t b) {
+  uint32_t mask = 0;
+  for (int j = a; j <= b; j++) {
+    mask |= 1 << j;
+  }
+
+  return mask;
+}
+
+//------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
 
@@ -99,14 +113,15 @@ init_predictor()
       localBranchHistTableSize = 1 << lhistoryBits; 
       localPatternTableSize = 1 << lhistoryBits;
 
-      // allocate for all 3 tables
+      // allocate mem for all 3 tables
       metaPredictorTable = (uint32_t*)malloc( metaPredictorTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
       localBranchHistTable = (uint32_t*)malloc( localBranchHistTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
       localPatternTable = (uint32_t*)malloc( localPatternTableSize * sizeof(uint32_t) ); // alloc mem for local pattern table 
 
-      // default values for each table: weakly not-taken (?)
+      // default values for each table is weakly not-taken (?)
       for (int i = 0; i < localBranchHistTableSize; i++) {
-        // metaPredictorTable holds values bet. 0 and 3, each chooses between Predictor 1 and predictor 2. (eg. strongly P1, weakly P1, weakly P2, strongly P2..)
+        // metaPredictorTable holds values bet. 0 and 3, 
+        // each chooses between Predictor 1 and predictor 2. (eg. strongly P1, weakly P1, weakly P2, strongly P2..)
         metaPredictorTable[i] =  WN; 
         localBranchHistTable[i] = 0; // holds n-bit local branch history. initially assume all NOT-TAKEN
         localPatternTable[i] =  WN;// holds values bet. 0 and 3
@@ -157,10 +172,37 @@ make_prediction(uint32_t pc)
       }
       break;
     case TOURNAMENT:
-      // 
+      // the meta predictor chooses bet. Predictor 1 & 2 
+      // predictedResult = 
+
+      uint32_t metaBits = create_bitMask(0, lhistoryBits - 1); // extract lhistory num of bits from 'pc' starting from bit 0 to bit lhistoryBits - 1
+      uint32_t metaTableIndex = metaBits & pc; // get n bits from pc and access meta-predictor table
+      uint32_t which_predictor = metaPredictorTable[metaTableIndex]; // 2 bit counter figure out which predictor to use: 0,1-->local   1,2--> global
+
+      if (which_predictor > 1) { // we choose Predictor 1 (local predictor)
+        // access local predictor at index 'which_predictor'
+        uint32_t localPatternTableIndex = localBranchHistTable[which_predictor]; // get ready to access local pattern table (table of 2^n 2-bit counters)
+        uint32_t result = localPatternTable[localPatternTableIndex];
+        // check if SN, WN, WT, ST --- and return accordingly
+        if (result > 1) 
+          return TAKEN;
+        else 
+          return NOTTAKEN;
+      }
+
+      else { // if not, we chose Pred 2 (global predictor)
+        // access global branch predictor values with global history bits
+        uint32_t m_bit_mask = create_bitMask(0, ghistoryBits - 1); // create m-bit bitmask
+        uint32_t globalBranchPredictorIndex = m_bit_mask & globalBranchHistory; // extract m bits from 'global branch history'
+        uint32_t result = globalPredictorTable[globalBranchPredictorIndex]; 
+        // check if SN, WN, WT, ST --- and return accordingly
+        if (result > 1) 
+          return TAKEN;
+        else 
+          return NOTTAKEN;
+      }
       break;
     case CUSTOM:
-
       break;
     default:
       break;
@@ -199,6 +241,10 @@ train_predictor(uint32_t pc, uint8_t outcome)
       }
 
       gHis = gHis & (preTabLength - 1);
+      break;
+    case TOURNAMENT: 
+      
+      break;
   }
 
 }
