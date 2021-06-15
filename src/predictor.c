@@ -39,7 +39,6 @@ int verbose;
 //
 //TODO: Add your own Branch Predictor data structures here
 //
-
 uint32_t preTabLength; 
 uint32_t *preTab; // predictor table
 uint32_t gHis; 
@@ -77,6 +76,14 @@ uint32_t create_bitMask(uint32_t a, uint32_t b) {
   return mask;
 }
 
+// clears the last bit for a given input bit of width 'bitWidth'
+uint32_t clearLastBit(uint32_t inputBits, uint32_t bitWidth) {
+  uint32_t output = inputBits;
+  output &= ~(1 << (bitWidth - 1)); 
+
+  return output;
+}
+
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -104,42 +111,38 @@ init_predictor()
       result = 0;
 
     case TOURNAMENT:
-    printf("Start initializing\n");
-    preTabLength = 1 << ghistoryBits;
-
-    preTab = (uint32_t*)malloc( preTabLength*sizeof(uint32_t) );    // predictor table
-    for(i = 0; i < preTabLength; i++){    //initialized to WN
-        preTab[i] = 1;
-    }  
-
-    gHis = 0;  //initialized to NOTTAKEN
-    result = 0;
+      // printf("Start initializing\n");
+      result = 0;
   
-    metaPredictorTableSize = 1 << lhistoryBits;
-    localBranchHistTableSize = 1 << lhistoryBits; 
-    localPatternTableSize = 1 << lhistoryBits;    
-    globalHistoryBits = ghistoryBits;
-    globalPredictorTableSize = 1 << globalHistoryBits;
-    globalBranchHistory = 0; 
-    predictedResult = 0;
+      metaPredictorTableSize = 1 << lhistoryBits;
+      localBranchHistTableSize = 1 << lhistoryBits; 
+      localPatternTableSize = 1 << lhistoryBits;    
+      globalHistoryBits = ghistoryBits;
+      globalPredictorTableSize = 1 << globalHistoryBits;
+      globalBranchHistory = 0; // assume all not taken at the start
+      predictedResult = 0;
 
-    metaPredictorTable = (uint32_t*)malloc( metaPredictorTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
-    localBranchHistTable = (uint32_t*)malloc( localBranchHistTableSize * sizeof(uint32_t) ); // alloc mem for local branch hist table
-    localPatternTable = (uint32_t*)malloc( localPatternTableSize * sizeof(uint32_t) ); // alloc mem for local pattern table 
-    globalPredictorTable = (uint32_t*)malloc( globalPredictorTableSize * sizeof(uint32_t) ); // alloc mem for global predictor table 
+      metaPredictorTable = (uint32_t*)malloc( metaPredictorTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
+      localBranchHistTable = (uint32_t*)malloc( localBranchHistTableSize * sizeof(uint32_t) ); // alloc mem for local branch hist table
+      localPatternTable = (uint32_t*)malloc( localPatternTableSize * sizeof(uint32_t) ); // alloc mem for local pattern table 
+      globalPredictorTable = (uint32_t*)malloc( globalPredictorTableSize * sizeof(uint32_t) ); // alloc mem for global predictor table 
 
-    for (i = 0; i < localBranchHistTableSize; i++) {
-      metaPredictorTable[i] =  1; 
-      localBranchHistTable[i] = 0; // holds n-bit local branch history. initially assume all NOT-TAKEN
-      localPatternTable[i] =  1; // holds values bet. 0 and 3
-    }
+      for (i = 0; i < localBranchHistTableSize; i++) {
+        metaPredictorTable[i] =  1; 
+        localBranchHistTable[i] = 0; // holds n-bit local branch history. initially assume all NOT-TAKEN
+        localPatternTable[i] =  1; // holds values bet. 0 and 3
+      }
 
-    // initialize global br predictor 
-    for(j = 0; j < globalPredictorTableSize; j++){
-      globalPredictorTable[j] =  1;
-    }
-    printf("finish tournament initialization\n");
+      // initialize global br predictor 
+      for(j = 0; j < globalPredictorTableSize; j++){
+        globalPredictorTable[j] =  1;
+      }
+      // printf("finish tournament initialization\n");
 
+      // printf("meta table size is: %d\n", metaPredictorTableSize); // 1024
+      // printf("local br hist table size is: %d\n", localBranchHistTableSize); // 1024
+      // printf("local pattern table size is: %d\n", localPatternTableSize); // 1024
+      // printf("global br predictor table size is: %d\n", globalPredictorTableSize); // 2^9 == 512 
   }
 }
 
@@ -171,12 +174,12 @@ make_prediction(uint32_t pc)
       }
       break;
     case TOURNAMENT:
-      printf("tournament making prediction");
+      // printf("tournament making prediction");
       result = 0;
       // the meta predictor chooses bet. Predictor 1 & 2 
       // predictedResult = 
 
-      printf("tournament making prediction");
+      // printf("tournament making prediction\n");
       uint32_t metaBits = create_bitMask(0, lhistoryBits - 1); // extract lhistory num of bits from 'pc' starting from bit 0 to bit lhistoryBits - 1
       uint32_t metaTableIndex = metaBits & pc; // get n bits from pc and access meta-predictor table
       uint32_t which_predictor = metaPredictorTable[metaTableIndex]; // 2 bit counter figure out which predictor to use: 0,1-->local   1,2--> global
@@ -226,12 +229,12 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //
 
   uint32_t n_bit_mask;
-  uint32_t localIdx;
-  uint32_t localPatternIndex;
-  uint32_t p1Prediction;
   uint32_t m_bit_mask;
-  uint32_t globalBranchPredictorIndex;
+  uint32_t localIdx;
+  uint32_t localPatternIndex; // access local pattern
+  uint32_t p1Prediction;
   uint32_t p2Prediction;
+  uint32_t globalBranchPredictorIndex;
 
   switch(bpType) {
     case GSHARE:
@@ -256,9 +259,13 @@ train_predictor(uint32_t pc, uint8_t outcome)
 
       // UPDATE META TABLE VALUES
       // get P1 (local) prediction: 
-      printf("tournament training predictor");
+      // printf("tournament training predictor\n");
       n_bit_mask = create_bitMask(0, lhistoryBits-1);// create n-bit mask
       localIdx = n_bit_mask & pc;
+      // printf("local history bits %d\n", lhistoryBits); // shld be 10
+      // printf("pc is %d\n", pc); 
+      // printf("n_bit_mask is %d\n", n_bit_mask); // shld be 1023 in decimal
+      // printf("localIdx is: %d\n", localIdx); // should be between 0 and 1023 (since 9:10:10)
 
       localPatternIndex = localBranchHistTable[localIdx];
       p1Prediction = NOTTAKEN;
@@ -269,8 +276,12 @@ train_predictor(uint32_t pc, uint8_t outcome)
       // get P2 (global) prediction: 
       m_bit_mask = create_bitMask(0, ghistoryBits - 1); // create m-bit bitmask
       globalBranchPredictorIndex = m_bit_mask & globalBranchHistory; // extract m bits from 'global branch history'
-      p2Prediction = NOTTAKEN;
+      // printf("global branch history before: %d\n", globalBranchHistory); 
+      // printf("global history bits %d\n", ghistoryBits); // shld be 9
+      // printf("m_bit_mask is %d\n", m_bit_mask);  // shld be 511 in decimal
+      // printf("globalBr predictor index is: %d\n", globalBranchPredictorIndex); // should be between 0 and 511 (since 9:10:10)
 
+      p2Prediction = NOTTAKEN;
       if (globalPredictorTable[globalBranchPredictorIndex] > 1) {
         p2Prediction = TAKEN;
       }
@@ -289,6 +300,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
       // else P1 P2 both wrong/correct, dont change metaTable value
 // left shift by 1 bit (0) first
       // next: update local br predictor tables: i.e. local branch history table & local pattern table
+      localBranchHistTable[localIdx] = clearLastBit(localBranchHistTable[localIdx], lhistoryBits); // clear n-th bit before inserting new one in
       localBranchHistTable[localIdx] <<= 1;
       if (outcome == TAKEN) {
         localBranchHistTable[localIdx] |= 1;
@@ -303,7 +315,9 @@ train_predictor(uint32_t pc, uint8_t outcome)
       }
 
       // next: update global br predictor values: i.e global branch history and global branch prediction table
-      globalBranchHistory <<= 1; 
+      // printf("global branch history before %d\n", globalBranchHistory); 
+      globalBranchHistory = clearLastBit(globalBranchHistory, globalHistoryBits); // clear m-th bit before inserting new one in
+      globalBranchHistory <<= 1;  // global branch history has fixed number of bits       
 
       if (outcome == TAKEN) {
         globalBranchHistory |= 1;
@@ -316,6 +330,9 @@ train_predictor(uint32_t pc, uint8_t outcome)
           globalPredictorTable[globalBranchPredictorIndex]--;
         }
       }
+      // printf("outcome is %d\n", outcome); 
+      // printf("global branch history after %d\n", globalBranchHistory); 
+      // printf("finished training!\n");
       break;
     // case CUSTOM: 
     //   break;
