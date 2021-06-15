@@ -149,7 +149,7 @@ init_predictor()
       // printf("global br predictor table size is: %d\n", globalPredictorTableSize); // 2^9 == 512 
     case CUSTOM: 
       // since no args taken for lhistory, ghistory bits, and pcIndexBits:
-      lhistoryBits = 10;
+      lhistoryBits = 13;
       pcIndexBits = lhistoryBits;
       ghistoryBits = 9;
 
