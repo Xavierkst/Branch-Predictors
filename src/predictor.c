@@ -115,7 +115,7 @@ init_predictor()
 
       // allocate mem for all 3 tables
       metaPredictorTable = (uint32_t*)malloc( metaPredictorTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
-      localBranchHistTable = (uint32_t*)malloc( localBranchHistTableSize * sizeof(uint32_t) ); // alloc mem for meta predictor table
+      localBranchHistTable = (uint32_t*)malloc( localBranchHistTableSize * sizeof(uint32_t) ); // alloc mem for local branch hist table
       localPatternTable = (uint32_t*)malloc( localPatternTableSize * sizeof(uint32_t) ); // alloc mem for local pattern table 
 
       // default values for each table is weakly not-taken (?)
@@ -124,7 +124,7 @@ init_predictor()
         // each chooses between Predictor 1 and predictor 2. (eg. strongly P1, weakly P1, weakly P2, strongly P2..)
         metaPredictorTable[i] =  WN; 
         localBranchHistTable[i] = 0; // holds n-bit local branch history. initially assume all NOT-TAKEN
-        localPatternTable[i] =  WN;// holds values bet. 0 and 3
+        localPatternTable[i] =  WN; // holds values bet. 0 and 3
       }
 
       // initialize global br predictor 
@@ -172,6 +172,7 @@ make_prediction(uint32_t pc)
       }
       break;
     case TOURNAMENT:
+      result = 0;
       // the meta predictor chooses bet. Predictor 1 & 2 
       // predictedResult = 
 
@@ -182,7 +183,7 @@ make_prediction(uint32_t pc)
       if (which_predictor > 1) { // we choose Predictor 1 (local predictor)
         // access local predictor at index 'which_predictor'
         uint32_t localPatternTableIndex = localBranchHistTable[which_predictor]; // get ready to access local pattern table (table of 2^n 2-bit counters)
-        uint32_t result = localPatternTable[localPatternTableIndex];
+        result = localPatternTable[localPatternTableIndex];
         // check if SN, WN, WT, ST --- and return accordingly
         if (result > 1) 
           return TAKEN;
@@ -194,7 +195,7 @@ make_prediction(uint32_t pc)
         // access global branch predictor values with global history bits
         uint32_t m_bit_mask = create_bitMask(0, ghistoryBits - 1); // create m-bit bitmask
         uint32_t globalBranchPredictorIndex = m_bit_mask & globalBranchHistory; // extract m bits from 'global branch history'
-        uint32_t result = globalPredictorTable[globalBranchPredictorIndex]; 
+        result = globalPredictorTable[globalBranchPredictorIndex]; 
         // check if SN, WN, WT, ST --- and return accordingly
         if (result > 1) 
           return TAKEN;
@@ -222,7 +223,6 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //
   //TODO: Implement Predictor training
   //
-
   switch(bpType) {
     case GSHARE:
       // printf("GSHARE training\n");
@@ -243,7 +243,72 @@ train_predictor(uint32_t pc, uint8_t outcome)
       gHis = gHis & (preTabLength - 1);
       break;
     case TOURNAMENT: 
-      
+
+      // UPDATE META TABLE VALUES
+      // get P1 (local) prediction: 
+      uint32_t n_bit_mask = create_bitMask(0, lhistoryBits-1);// create n-bit mask
+      uint32_t localIdx = n_bit_mask & pc; 
+
+      uint32_t localPatternIndex = localBranchHistTable[localIdx];
+      uint32_t p1Prediction = NOTTAKEN;
+      if (localPatternTable[localPatternIndex] > 1) {
+        p1Prediction = TAKEN;
+      }
+
+      // get P2 (global) prediction: 
+      uint32_t m_bit_mask = create_bitMask(0, ghistoryBits - 1); // create m-bit bitmask
+      uint32_t globalBranchPredictorIndex = m_bit_mask & globalBranchHistory; // extract m bits from 'global branch history'
+      uint32_t p2Prediction = NOTTAKEN;
+
+      if (globalPredictorTable[globalBranchPredictorIndex] > 1) {
+        p2Prediction = TAKEN;
+      }
+
+      // First: update META TABLE by checking p1 and p2 prediction values vs actual outcome
+      if (p1Prediction == outcome && p2Prediction != outcome) { // if p1 correct, p2 wrong, we increment meta table to favor p1 (10, 11)
+        if (metaPredictorTable[localIdx] < 3) {
+          metaPredictorTable[localIdx]++;
+        }
+      }
+      else if (p1Prediction != outcome && p2Prediction == outcome) { // if p1 wrong, p2 correct, we decrement meta table to favor p2 (00, 01)
+        if (metaPredictorTable[localIdx] > 0) {
+          metaPredictorTable[localIdx]--;
+        }
+      }
+      // else P1 P2 both wrong/correct, dont change metaTable value
+// left shift by 1 bit (0) first
+      // next: update local br predictor tables: i.e. local branch history table & local pattern table
+      localBranchHistTable[localIdx] <<= 1;
+      if (outcome == TAKEN) {
+        localBranchHistTable[localIdx] |= 1;
+        if (localPatternTable[localPatternIndex] < 3) {
+          localPatternTable[localPatternIndex]++;
+        }
+      }
+      else { // outcome NOTTAKEN
+         if (localPatternTable[localPatternIndex] > 0) {
+          localPatternTable[localPatternIndex]--;
+        } 
+      }
+
+      // next: update global br predictor values: i.e global branch history and global branch prediction table
+      globalBranchHistory <<= 1; 
+
+      if (outcome == TAKEN) {
+        globalBranchHistory |= 1;
+        if (globalPredictorTable[globalBranchPredictorIndex] < 3) {
+          globalPredictorTable[globalBranchPredictorIndex]++;
+        }
+      }
+      else { // outcome NOTTAKEN
+        if (globalPredictorTable[globalBranchPredictorIndex] > 0) {
+          globalPredictorTable[globalBranchPredictorIndex]--;
+        }
+      }
+      break;
+    case CUSTOM: 
+      break;
+    default: 
       break;
   }
 
