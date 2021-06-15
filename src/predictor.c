@@ -151,7 +151,7 @@ init_predictor()
       // since no args taken for lhistory, ghistory bits, and pcIndexBits:
       lhistoryBits = 10;
       pcIndexBits = lhistoryBits;
-      ghistoryBits = 9;
+      ghistoryBits = 13;
 
       metaPredictorTableSize = 1 << lhistoryBits; // 2^n elements large
       localBranchHistTableSize = 1 << lhistoryBits; 
