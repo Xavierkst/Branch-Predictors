@@ -186,7 +186,9 @@ make_prediction(uint32_t pc)
 
       if (which_predictor > 1) { // we choose Predictor 1 (local predictor)
         // access local predictor at index 'which_predictor'
-        uint32_t localPatternTableIndex = localBranchHistTable[which_predictor]; // get ready to access local pattern table (table of 2^n 2-bit counters)
+        // uint32_t localPatternTableIndex = localBranchHistTable[which_predictor]; // get ready to access local pattern table (table of 2^n 2-bit counters)
+        // access local predictor at index 'metaTableIndex'
+        uint32_t localPatternTableIndex = localBranchHistTable[metaTableIndex]; // get ready to access local pattern table (table of 2^n 2-bit counters)
         result = localPatternTable[localPatternTableIndex];
         // check if SN, WN, WT, ST --- and return accordingly
         if (result > 1) 
